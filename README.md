@@ -24,33 +24,32 @@
 ```bash
 git clone [https://github.com/ParshwaGosrani/sahkar-sahayak.git](https://github.com/ParshwaGosrani/sahkar-sahayak.git)
 cd sahkar-sahayak
-2. Backend Setup
+```
+### 2. Backend Setup
 Create a virtual environment and install the required Python packages.
-
-Bash
+```bash
 python -m venv venv
 source venv/bin/activate  # On Windows use: venv\Scripts\activate
 pip install -r requirements.txt
+```
 Create a .env file in the root directory and add your Gemini API key:
-
-Plaintext
 GEMINI_API_KEY=your_actual_api_key_here
+
 Start the FastAPI server:
-
-Bash
+```bash
 uvicorn main:app --reload
-The backend will run on http://127.0.0.1:8000.
-
-3. Frontend Setup
+```
+###3. Frontend Setup
 Open a new terminal window, navigate to the frontend directory, and install the dependencies.
-
-Bash
+```bash
 cd frontend
 npm install
+```
 Start the Vite development server:
 
-Bash
+```Bash
 npm run dev
+```
 The frontend will be available at http://localhost:5173.
 
 📁 Project Structure
