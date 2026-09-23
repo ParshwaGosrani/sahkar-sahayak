@@ -52,8 +52,9 @@ npm run dev
 ```
 The frontend will be available at http://localhost:5173.
 
-📁 Project Structure
-Plaintext
+## 📁 Project Structure
+
+```text
 sahkar-sahayak/
 ├── main.py                  # FastAPI application and RAG pipeline
 ├── ingest.py                # Script to convert PDFs into FAISS vector embeddings
@@ -65,14 +66,13 @@ sahkar-sahayak/
     │   └── App.jsx          # Main Chat UI and API integration
     ├── package.json
     └── tailwind.config.js
-⚙️ How it Works
-Document Ingestion: ingest.py reads official PDFs, splits them into 1000-character chunks, and generates high-dimensional embeddings using a HuggingFace transformer model.
+```
 
-Retrieval: When a user asks a question, FastAPI vectorizes the query and performs a Cosine Similarity search in the FAISS database to find the most relevant policy clauses.
+## ⚙️ How it Works
+1. **Document Ingestion:** `ingest.py` reads official PDFs, splits them into 1000-character chunks, and generates high-dimensional embeddings using a HuggingFace transformer model.
+2. **Retrieval:** When a user asks a question, FastAPI vectorizes the query and performs a Cosine Similarity search in the FAISS database to find the most relevant policy clauses.
+3. **Generation:** The retrieved chunks are injected into a Few-Shot prompt template and sent to Gemini, which synthesizes a formatted, cited response.
 
-Generation: The retrieved chunks are injected into a Few-Shot prompt template and sent to Gemini, which synthesizes a formatted, cited response.
-
-👤 Author
-Parshwa Gosrani
-
-GitHub: @ParshwaGosrani
+## 👤 Author
+**Parshwa Gosrani** 
+* GitHub: [@ParshwaGosrani](https://github.com/ParshwaGosrani)
