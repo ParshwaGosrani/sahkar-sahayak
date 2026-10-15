@@ -6,14 +6,18 @@ from pydantic import BaseModel
 from dotenv import load_dotenv
 from langchain_community.vectorstores import FAISS
 from langchain_huggingface import HuggingFaceEmbeddings
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 
 load_dotenv()
+
 api_key = os.getenv("GEMINI_API_KEY")
 if not api_key:
     raise ValueError("GEMINI_API_KEY not found in .env")
 
-genai.configure(api_key=api_key)
+# Initialize Gemini Client with the new SDK
+client = genai.Client(api_key=api_key)
+
 DB_FAISS_PATH = "vectorstore/db_faiss"
 
 # Initialize FastAPI app
@@ -36,16 +40,7 @@ app.add_middleware(
 print("Loading vector database and embedding model...")
 embeddings = HuggingFaceEmbeddings(model_name="paraphrase-multilingual-MiniLM-L12-v2")
 db = FAISS.load_local(DB_FAISS_PATH, embeddings, allow_dangerous_deserialization=True)
-
-# Parameter-controlled model for SLA compliance (Temperature & Token bounds)
-model = genai.GenerativeModel(
-    "gemini-3.6-flash",
-    generation_config=genai.GenerationConfig(
-        temperature=0.2,
-        max_output_tokens=600,
-    )
-)
-print("Vector database and Gemini model ready.")
+print("Vector database ready.")
 
 class QueryRequest(BaseModel):
     query: str
@@ -105,7 +100,15 @@ def handle_query(request: QueryRequest):
         {request.query}
         """
 
-        response = model.generate_content(prompt)
+        # Generate response using the exact model allowed for your API key
+        response = client.models.generate_content(
+            model='gemini-3.8-flash',
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                temperature=0.2,
+                max_output_tokens=1024,
+            )
+        )
         unique_sources = sorted(list(set(sources)))
 
         return QueryResponse(
@@ -114,4 +117,8 @@ def handle_query(request: QueryRequest):
         )
 
     except Exception as e:
+        import traceback
+        print("\n--- ERROR DETAILS ---")
+        traceback.print_exc()
+        print("---------------------\n")
         raise HTTPException(status_code=500, detail=str(e))
