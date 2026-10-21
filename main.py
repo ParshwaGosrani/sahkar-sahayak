@@ -6,17 +6,16 @@ from pydantic import BaseModel
 from dotenv import load_dotenv
 from langchain_community.vectorstores import FAISS
 from langchain_huggingface import HuggingFaceEmbeddings
-from google import genai
-from google.genai import types
+from groq import Groq
 
 load_dotenv()
 
-api_key = os.getenv("GEMINI_API_KEY")
+api_key = os.getenv("GROQ_API_KEY")
 if not api_key:
-    raise ValueError("GEMINI_API_KEY not found in .env")
+    raise ValueError("GROQ_API_KEY not found in .env")
 
-# Initialize Gemini Client with the new SDK
-client = genai.Client(api_key=api_key)
+# Initialize Groq Client
+client = Groq(api_key=api_key)
 
 DB_FAISS_PATH = "vectorstore/db_faiss"
 
@@ -75,7 +74,7 @@ def handle_query(request: QueryRequest):
             
             sources.append(f"{file_name} - Page {int(page) + 1}")
 
-        # Few-Shot Prompt Engineering
+        # Exact Same Few-Shot Prompt Engineering
         prompt = f"""
         You are 'SAHKAR SAHAYAK', an expert assistant for Indian farmers and cooperative members.
         Answer the user's question accurately using the provided official context below.
@@ -100,22 +99,47 @@ def handle_query(request: QueryRequest):
         {request.query}
         """
 
-        # Generate response using the exact model allowed for your API key
-        response = client.models.generate_content(
-            model='gemini-3.8-flash',
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                temperature=0.2,
-                max_output_tokens=1024,
+        # Prioritized list of active Groq free-tier models for fallback
+        fallback_models = [
+            'meta-llama/llama-4-scout-17b-16e-instruct', # Primary: Newest Llama 4
+            'openai/gpt-oss-20b',                        # Backup 1: Fast GPT-OSS
+            'qwen/qwen3.8-27b'                           # Backup 2: Qwen 3.8
+        ]
+        
+        response_text = None
+        
+        # Try each model until one succeeds
+        for model_name in fallback_models:
+            try:
+                print(f"Attempting generation with {model_name}...")
+                response = client.chat.completions.create(
+                    model=model_name,
+                    messages=[
+                        {"role": "user", "content": prompt}
+                    ],
+                    temperature=0.2,
+                    max_tokens=2048,
+                )
+                response_text = response.choices[0].message.content
+                break # Exit the loop immediately if successful
+            except Exception as e:
+                print(f"Warning: {model_name} failed ({str(e)}). Switching models...")
+                continue
+                
+        # If all models in the list fail
+        if not response_text:
+            return QueryResponse(
+                answer="The Sahkar Sahayak AI is currently experiencing unprecedented traffic across all backup servers. Please wait 30 seconds and try again.",
+                sources=[]
             )
-        )
-        unique_sources = sorted(list(set(sources)))
 
+        unique_sources = sorted(list(set(sources)))
+        
         return QueryResponse(
-            answer=response.text,
+            answer=response_text,
             sources=unique_sources
         )
-
+    
     except Exception as e:
         import traceback
         print("\n--- ERROR DETAILS ---")
