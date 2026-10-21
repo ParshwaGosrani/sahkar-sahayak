@@ -5,14 +5,18 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
 from langchain_community.vectorstores import FAISS
-from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_community.embeddings import HuggingFaceInferenceAPIEmbeddings
 from groq import Groq
 
 load_dotenv()
 
 api_key = os.getenv("GROQ_API_KEY")
 if not api_key:
-    raise ValueError("GROQ_API_KEY not found in .env")
+    raise ValueError("GROQ_API_KEY not found in environment variables")
+
+hf_token = os.getenv("HF_TOKEN")
+if not hf_token:
+    raise ValueError("HF_TOKEN not found in environment variables")
 
 # Initialize Groq Client
 client = Groq(api_key=api_key)
@@ -36,8 +40,11 @@ app.add_middleware(
 )
 
 # Cache loaded vector database and model on startup
-print("Loading vector database and embedding model...")
-embeddings = HuggingFaceEmbeddings(model_name="paraphrase-multilingual-MiniLM-L12-v2")
+print("Loading vector database and embedding model via Hugging Face API...")
+embeddings = HuggingFaceInferenceAPIEmbeddings(
+    api_key=hf_token,
+    model_name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+)
 db = FAISS.load_local(DB_FAISS_PATH, embeddings, allow_dangerous_deserialization=True)
 print("Vector database ready.")
 
