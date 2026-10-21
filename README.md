@@ -10,7 +10,7 @@
 
 ## 🛠️ Tech Stack
 * **Backend:** Python, FastAPI, Uvicorn
-* **AI/ML:** LangChain, FAISS, HuggingFace (`paraphrase-multilingual-MiniLM-L12-v2`), Google Gemini API (`gemini-3.6-flash`)
+* **AI/ML:** LangChain, FAISS, HuggingFace (`paraphrase-multilingual-MiniLM-L12-v2`), Google Gemini API (`gemini-3.8-flash`)
 * **Frontend:** React, Vite, Tailwind CSS, Lucide React, React Markdown
 
 ## 🚀 Getting Started
