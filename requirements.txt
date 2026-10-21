@@ -8,3 +8,4 @@ uvicorn
 numpy
 groq
 huggingface_hub
+langchain-huggingface

@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
 from langchain_community.vectorstores import FAISS
-from langchain_community.embeddings import HuggingFaceInferenceAPIEmbeddings
+from langchain_huggingface import HuggingFaceEndpointEmbeddings
 from groq import Groq
 
 load_dotenv()
@@ -41,9 +41,9 @@ app.add_middleware(
 
 # Cache loaded vector database and model on startup
 print("Loading vector database and embedding model via Hugging Face API...")
-embeddings = HuggingFaceInferenceAPIEmbeddings(
-    api_key=hf_token,
-    model_name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+embeddings = HuggingFaceEndpointEmbeddings(
+    repo_id="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+    huggingfacehub_api_token=hf_token
 )
 db = FAISS.load_local(DB_FAISS_PATH, embeddings, allow_dangerous_deserialization=True)
 print("Vector database ready.")
@@ -54,6 +54,7 @@ class QueryRequest(BaseModel):
 
 class QueryResponse(BaseModel):
     answer: str
+    response: str  # Included both keys to guarantee frontend compatibility
     sources: List[str]
 
 @app.get("/")
@@ -106,11 +107,11 @@ def handle_query(request: QueryRequest):
         {request.query}
         """
 
-        # Prioritized list of active Groq free-tier models for fallback
+        # Prioritized list of actual supported active Groq models
         fallback_models = [
-            'meta-llama/llama-4-scout-17b-16e-instruct', # Primary: Newest Llama 4
-            'openai/gpt-oss-20b',                        # Backup 1: Fast GPT-OSS
-            'qwen/qwen3.8-27b'                           # Backup 2: Qwen 3.8
+            "llama-3.3-70b-versatile",
+            "llama-3.1-8b-instant",
+            "mixtral-8x7b-32768"
         ]
         
         response_text = None
@@ -135,8 +136,10 @@ def handle_query(request: QueryRequest):
                 
         # If all models in the list fail
         if not response_text:
+            error_msg = "The Sahkar Sahayak AI is currently experiencing unprecedented traffic across all backup servers. Please wait 30 seconds and try again."
             return QueryResponse(
-                answer="The Sahkar Sahayak AI is currently experiencing unprecedented traffic across all backup servers. Please wait 30 seconds and try again.",
+                answer=error_msg,
+                response=error_msg,
                 sources=[]
             )
 
@@ -144,6 +147,7 @@ def handle_query(request: QueryRequest):
         
         return QueryResponse(
             answer=response_text,
+            response=response_text,
             sources=unique_sources
         )
     
