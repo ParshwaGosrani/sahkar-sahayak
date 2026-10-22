@@ -1,42 +1,47 @@
 import os
+import time
+from dotenv import load_dotenv
 from langchain_community.document_loaders import PyPDFDirectoryLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_community.vectorstores import FAISS
-from langchain_huggingface import HuggingFaceEmbeddings
 
-DATA_DIR = "data/"
-DB_FAISS_PATH = "vectorstore/db_faiss"
+load_dotenv()
 
-def create_vector_db():
-    if not os.path.exists(DATA_DIR):
-        print(f"Error: Directory '{DATA_DIR}' not found. Please create it and add your PDFs.")
-        return
+if "GEMINI_API_KEY" not in os.environ:
+    raise ValueError("GEMINI_API_KEY not found in .env")
 
-    print(f"Loading all PDF documents from '{DATA_DIR}'...")
-    # This loader reads every PDF in the folder automatically
-    loader = PyPDFDirectoryLoader(DATA_DIR)
-    documents = loader.load()
-    print(f"Loaded {len(documents)} total pages from all documents.")
+print("Loading PDFs...")
+# CHANGE "data" IF YOUR PDFS ARE IN A DIFFERENT FOLDER
+loader = PyPDFDirectoryLoader("data") 
+documents = loader.load()
 
-    if len(documents) == 0:
-        print("No PDFs found in the data directory!")
-        return
+print(f"Loaded {len(documents)} pages. Splitting text...")
+text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
+chunks = text_splitter.split_documents(documents)
+print(f"Total chunks created: {len(chunks)}")
 
-    print("Chunking documents...")
-    text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=1000,
-        chunk_overlap=150
-    )
-    chunks = text_splitter.split_documents(documents)
-    print(f"Created {len(chunks)} text chunks.")
+print("Generating free Gemini Embeddings...")
+embeddings = GoogleGenerativeAIEmbeddings(model="gemini-embedding-001")
 
-    print("Generating local multilingual embeddings...")
-    embeddings = HuggingFaceEmbeddings(model_name="paraphrase-multilingual-MiniLM-L12-v2")
+db = None
+batch_size = 80
+
+for i in range(0, len(chunks), batch_size):
+    batch = chunks[i : i + batch_size]
+    print(f"Processing batch {i} to {i + len(batch)} of {len(chunks)}...")
     
-    print("Saving to FAISS vector store...")
-    db = FAISS.from_documents(chunks, embeddings)
-    db.save_local(DB_FAISS_PATH)
-    print(f"Vector store successfully saved to '{DB_FAISS_PATH}'.")
+    if db is None:
+        db = FAISS.from_documents(batch, embeddings)
+    else:
+        db.add_documents(batch)
+        
+    # SAVE PROGRESS AFTER EVERY BATCH
+    db.save_local("vectorstore/db_faiss")
+    print("-> Progress saved successfully.")
+        
+    if i + batch_size < len(chunks):
+        print("Pausing for 60 seconds to respect free-tier limits...")
+        time.sleep(60)
 
-if __name__ == "__main__":
-    create_vector_db()
+print("Database successfully rebuilt! You are ready to deploy.")

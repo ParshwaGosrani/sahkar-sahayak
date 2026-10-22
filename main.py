@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
 from langchain_community.vectorstores import FAISS
-from langchain_huggingface import HuggingFaceEndpointEmbeddings
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from groq import Groq
 
 load_dotenv()
@@ -14,11 +14,11 @@ api_key = os.getenv("GROQ_API_KEY")
 if not api_key:
     raise ValueError("GROQ_API_KEY not found in environment variables")
 
-hf_token = os.getenv("HF_TOKEN")
-if not hf_token:
-    raise ValueError("HF_TOKEN not found in environment variables")
+gemini_key = os.getenv("GEMINI_API_KEY")
+if not gemini_key:
+    raise ValueError("GEMINI_API_KEY not found in environment variables")
 
-# Initialize Groq Client
+# Initialize Groq Client for fast answer generation
 client = Groq(api_key=api_key)
 
 DB_FAISS_PATH = "vectorstore/db_faiss"
@@ -40,11 +40,10 @@ app.add_middleware(
 )
 
 # Cache loaded vector database and model on startup
-print("Loading vector database and embedding model via Hugging Face API...")
-embeddings = HuggingFaceEndpointEmbeddings(
-    repo_id="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
-    huggingfacehub_api_token=hf_token
-)
+print("Loading vector database and embedding model via free Gemini API...")
+
+# Initializing Gemini Embeddings (the "Librarian")
+embeddings = GoogleGenerativeAIEmbeddings(model="gemini-embedding-001")
 db = FAISS.load_local(DB_FAISS_PATH, embeddings, allow_dangerous_deserialization=True)
 print("Vector database ready.")
 
@@ -54,7 +53,6 @@ class QueryRequest(BaseModel):
 
 class QueryResponse(BaseModel):
     answer: str
-    response: str  # Included both keys to guarantee frontend compatibility
     sources: List[str]
 
 @app.get("/")
@@ -75,7 +73,6 @@ def handle_query(request: QueryRequest):
         for doc in docs:
             context_text += f"\n{doc.page_content}\n"
             
-            # Extract both the file name and the page number
             source_file = doc.metadata.get("source", "Unknown")
             file_name = os.path.basename(source_file)
             page = doc.metadata.get("page", 0)
@@ -107,14 +104,14 @@ def handle_query(request: QueryRequest):
         {request.query}
         """
 
-        # Prioritized list of actual supported active Groq models
+        # Prioritized list of active models accessible on this account tier
         fallback_models = [
-            "llama-3.3-70b-versatile",
-            "llama-3.1-8b-instant",
-            "mixtral-8x7b-32768"
+            "openai/gpt-oss-20b",
+            "openai/gpt-oss-120b"
         ]
         
         response_text = None
+        last_error = "No error recorded."
         
         # Try each model until one succeeds
         for model_name in fallback_models:
@@ -126,20 +123,28 @@ def handle_query(request: QueryRequest):
                         {"role": "user", "content": prompt}
                     ],
                     temperature=0.2,
-                    max_tokens=2048,
+                    max_tokens=1024,
                 )
-                response_text = response.choices[0].message.content
-                break # Exit the loop immediately if successful
+                
+                content = response.choices[0].message.content
+                
+                if content and content.strip():
+                    response_text = content
+                    break 
+                else:
+                    last_error = "Model returned an empty response."
+                    print(f"Warning: {model_name} returned empty text. Switching...")
+                    continue
+                    
             except Exception as e:
-                print(f"Warning: {model_name} failed ({str(e)}). Switching models...")
+                last_error = str(e)
+                print(f"Warning: {model_name} failed ({last_error}). Switching models...")
                 continue
                 
-        # If all models in the list fail
+        # If all models in the list fail or return empty
         if not response_text:
-            error_msg = "The Sahkar Sahayak AI is currently experiencing unprecedented traffic across all backup servers. Please wait 30 seconds and try again."
             return QueryResponse(
-                answer=error_msg,
-                response=error_msg,
+                answer=f"System Error: {last_error}",
                 sources=[]
             )
 
@@ -147,7 +152,6 @@ def handle_query(request: QueryRequest):
         
         return QueryResponse(
             answer=response_text,
-            response=response_text,
             sources=unique_sources
         )
     
